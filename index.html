@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProfPlanner — l'assistant du professeur</title>
+<link rel="stylesheet" href="./Asset/CSS/style.css">
+<script src="./Asset/JS/app.js " defer></script>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      ProfPlanner
+      <small>carnet de bord</small>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-btn" data-view="dashboard"><span class="dot"></span> Tableau de bord</button>
+      <button class="nav-btn" data-view="planning"><span class="dot"></span> Planning</button>
+      <button class="nav-btn" data-view="schedule"><span class="dot"></span> Mes horaires</button>
+      <button class="nav-btn" data-view="prep"><span class="dot"></span> Préparations</button>
+      <button class="nav-btn" data-view="classes"><span class="dot"></span> Classes</button>
+      <button class="nav-btn" data-view="tasks"><span class="dot"></span> Tâches</button>
+      <button class="nav-btn" data-view="evals"><span class="dot"></span> Évaluations</button>
+    </nav>
+    <div class="sidebar-footer">Données stockées localement<br>dans ce navigateur.</div>
+  </aside>
+
+  <main id="main"></main>
+</div>
+
+<div id="modal-root"></div>
+
+</body>
+</html>
