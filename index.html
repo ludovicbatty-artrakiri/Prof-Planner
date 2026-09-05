@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProfPlanner — l'assistant du professeur</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ProfPlanner">
+<meta name="theme-color" content="#1F3A2E">
+<script src="supabase-lib.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+ 
+<div id="auth-root"></div>
+ 
+<div class="app" id="app-root" style="display:none;">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        Prof'Planner
+        <small>carnet de bord</small>
+      </div>
+      <button class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu">☰</button>
+    </div>
+    <div class="sidebar-menu" id="sidebar-menu">
+      <nav class="nav" id="nav">
+        <button class="nav-btn" data-view="dashboard"><span class="dot"></span> Tableau de bord</button>
+        <button class="nav-btn" data-view="planning"><span class="dot"></span> Planning</button>
+        <button class="nav-btn" data-view="schedule"><span class="dot"></span> Mes horaires <span class="new-badge">nouveau</span></button>
+        <button class="nav-btn" data-view="calendar"><span class="dot"></span> Calendrier annuel <span class="new-badge">nouveau</span></button>
+        <button class="nav-btn" data-view="yearOverview"><span class="dot"></span> Année complète <span class="new-badge">nouveau</span></button>
+        <button class="nav-btn" data-view="prep"><span class="dot"></span> Préparations</button>
+        <button class="nav-btn" data-view="classes"><span class="dot"></span> Classes</button>
+        <button class="nav-btn" data-view="tasks"><span class="dot"></span> Tâches</button>
+        <button class="nav-btn" data-view="evals"><span class="dot"></span> Évaluations</button>
+        <button class="nav-btn" data-view="resources"><span class="dot"></span> Liens & documents <span class="new-badge">nouveau</span></button>
+      </nav>
+      <button class="nav-btn" id="install-btn" style="margin-top:auto;"><span class="dot"></span> 📲 Installer l'application</button>
+      <button class="nav-btn" id="logout-btn"><span class="dot"></span> Se déconnecter</button>
+      <div class="sidebar-footer" id="sync-status">Connecté · synchronisé en ligne</div>
+      <small class="sidebar-footer">© Art Rakiri 2026 Prof'Planner v1.0.0</small>
+    </div>
+  </aside>
+ 
+  <main id="main"></main>
+</div>
+ 
+<div id="modal-root"></div>
+ 
+</body>
+</html>
