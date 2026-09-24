@@ -207,7 +207,7 @@ async function cloudFetchAllData() {
     teacherDesk: (r.teacher_x !== null && r.teacher_y !== null) ? { x: Number(r.teacher_x), y: Number(r.teacher_y) } : null,
     desks: roomDesksRaw
       .filter((d) => d.room_id === r.id)
-      .map((d) => ({ id: d.id, x: Number(d.x), y: Number(d.y) })),
+      .map((d) => ({ id: d.id, x: Number(d.x), y: Number(d.y), rotation: d.rotation || 0 })),
   }));
 
   const seatingSeatsRaw = seatingSeatsRes.data || [];
@@ -316,7 +316,7 @@ async function cloudSyncAll(db, userId) {
     for (const room of db.rooms) {
       await sb.from("room_desks").delete().eq("room_id", room.id);
       if (room.desks && room.desks.length) {
-        const rows = room.desks.map((d) => ({ id: d.id, room_id: room.id, x: d.x, y: d.y }));
+        const rows = room.desks.map((d) => ({ id: d.id, room_id: room.id, x: d.x, y: d.y, rotation: d.rotation || 0 }));
         const { error } = await sb.from("room_desks").insert(rows);
         if (error) console.error("[sync] room_desks", error.message);
       }
