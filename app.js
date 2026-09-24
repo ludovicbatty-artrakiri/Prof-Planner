@@ -22,6 +22,36 @@ function nextDate(offsetDays) {
   return d.toISOString().slice(0, 10);
 }
 
+/* ---------- import CSV générique (Pronote, Excel...) ---------- */
+function parseCSV(text) {
+  const cleaned = text.replace(/^\uFEFF/, ""); // retire le BOM Excel si présent
+  const firstLine = cleaned.split(/\r?\n/, 1)[0] || "";
+  const delimiter = (firstLine.match(/;/g) || []).length >= (firstLine.match(/,/g) || []).length ? ";" : ",";
+
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i], next = cleaned[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === delimiter) { row.push(field); field = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && next === "\n") i++;
+        row.push(field); field = "";
+        if (row.some((f) => f.trim() !== "")) rows.push(row);
+        row = [];
+      } else { field += c; }
+    }
+  }
+  if (field !== "" || row.length > 0) { row.push(field); if (row.some((f) => f.trim() !== "")) rows.push(row); }
+  if (rows.length === 0) return { headers: [], data: [] };
+  return { headers: rows[0].map((h) => h.trim()), data: rows.slice(1) };
+}
+
 let pendingSyncCount = 0;
 
 async function save(db) {
@@ -1356,7 +1386,7 @@ function renderRoomEditor(main, room) {
   main.querySelector("#add-desk-btn").addEventListener("click", async () => {
     const n = room.desks.length;
     const col = n % 8, rowN = Math.floor(n / 8);
-    room.desks.push({ id: uid(), x: 20 + col * (DESK_W + 14), y: 90 + rowN * (DESK_H + 14) });
+    room.desks.push({ id: uid(), x: 20 + col * (DESK_W + 14), y: 90 + rowN * (DESK_H + 14), rotation: 0 });
     await save(db);
     render();
   });
@@ -1390,17 +1420,30 @@ function renderRoomEditor(main, room) {
   canvas.appendChild(teacherEl);
 
   room.desks.forEach((desk) => {
+    if (desk.rotation === undefined) desk.rotation = 0;
     const deskEl = document.createElement("div");
     deskEl.className = "desk desk-editable";
     deskEl.style.left = desk.x + "px";
     deskEl.style.top = desk.y + "px";
-    deskEl.innerHTML = `<span class="desk-remove" title="Supprimer cette table">✕</span>`;
+    deskEl.style.transform = `rotate(${desk.rotation}deg)`;
+    deskEl.innerHTML = `
+      <span class="desk-rotate" title="Pivoter (Maj+clic pour l'autre sens) — ${desk.rotation}°">⟳</span>
+      <span class="desk-remove" title="Supprimer cette table">✕</span>`;
     deskEl.querySelector(".desk-remove").addEventListener("click", async (e) => {
       e.stopPropagation();
       room.desks = room.desks.filter((d) => d.id !== desk.id);
       db.seatingPlans.forEach((pl) => { pl.seats = pl.seats.filter((s) => s.deskId !== desk.id); });
       await save(db);
       render();
+    });
+    const rotateBtn = deskEl.querySelector(".desk-rotate");
+    rotateBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const step = e.shiftKey ? -5 : 5;
+      desk.rotation = ((desk.rotation + step) % 360 + 360) % 360;
+      deskEl.style.transform = `rotate(${desk.rotation}deg)`;
+      rotateBtn.title = `Pivoter (Maj+clic pour l'autre sens) — ${desk.rotation}°`;
+      await save(db);
     });
     makeDeskDraggable(deskEl, desk, canvas, async () => { await save(db); }, DESK_W, DESK_H, room.canvasW, room.canvasH);
     canvas.appendChild(deskEl);
@@ -1626,6 +1669,7 @@ function renderSeating(main) {
   canvas.appendChild(teacherEl);
 
   room.desks.forEach((desk) => {
+    if (desk.rotation === undefined) desk.rotation = 0;
     const seatEntry = plan.seats.find((s) => s.deskId === desk.id);
     const occupant = seatEntry ? db.students.find((s) => s.id === seatEntry.studentId) : null;
     const deskEl = document.createElement("div");
@@ -1633,7 +1677,10 @@ function renderSeating(main) {
     if (occupant && occupant.id === seatingHeldStudentId) deskEl.classList.add("held");
     deskEl.style.left = desk.x + "px";
     deskEl.style.top = desk.y + "px";
-    deskEl.textContent = occupant ? occupant.name : "";
+    deskEl.style.transform = `rotate(${desk.rotation}deg)`;
+    if (occupant) {
+      deskEl.innerHTML = `<span style="display:inline-block;transform:rotate(${-desk.rotation}deg);">${occupant.name}</span>`;
+    }
     deskEl.addEventListener("click", async () => {
       if (seatingHeldStudentId) {
         if (occupant && occupant.id === seatingHeldStudentId) {
@@ -1759,11 +1806,91 @@ function openConstraintModal(classId, students) {
   };
 }
 
+function openCsvImportModal() {
+  openModal(`
+    <h2>Importer des élèves depuis un CSV</h2>
+    <p style="color:var(--ink-soft);font-size:12.5px;margin-bottom:14px;">
+      Fonctionne avec un export Pronote, Excel ou tout tableur (une ligne = un élève, avec une colonne nom et une colonne classe).
+    </p>
+    <div class="field"><label>Fichier CSV</label><input type="file" id="csv-file-input" accept=".csv,text/csv"></div>
+    <div id="csv-mapping-zone"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="f-cancel">Annuler</button>
+    </div>`);
+  document.getElementById("f-cancel").onclick = closeModal;
+
+  document.getElementById("csv-file-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { headers, data } = parseCSV(reader.result);
+      if (headers.length === 0 || data.length === 0) {
+        alert("Fichier vide ou illisible.");
+        return;
+      }
+      renderCsvMapping(headers, data);
+    };
+    reader.readAsText(file, "UTF-8");
+  });
+
+  function guessColumn(headers, keywords) {
+    const idx = headers.findIndex((h) => keywords.some((k) => h.toLowerCase().includes(k)));
+    return idx >= 0 ? idx : 0;
+  }
+
+  function renderCsvMapping(headers, data) {
+    const options = headers.map((h, i) => `<option value="${i}">${h || "(colonne " + (i + 1) + ")"}</option>`).join("");
+    const nameGuess = guessColumn(headers, ["nom", "élève", "eleve", "name"]);
+    const classGuess = guessColumn(headers, ["classe", "class", "groupe"]);
+    const zone = document.getElementById("csv-mapping-zone");
+    zone.innerHTML = `
+      <p style="font-size:12px;color:var(--ink-soft);margin:10px 0;">${data.length} ligne(s) détectée(s). Indique quelle colonne correspond à quoi :</p>
+      <div class="grid grid-2">
+        <div class="field"><label>Colonne "Nom de l'élève"</label><select id="csv-col-name">${options}</select></div>
+        <div class="field"><label>Colonne "Classe"</label><select id="csv-col-class">${options}</select></div>
+      </div>
+      <button class="btn btn-primary" id="csv-do-import" style="margin-top:8px;">Importer</button>`;
+    zone.querySelector("#csv-col-name").value = nameGuess;
+    zone.querySelector("#csv-col-class").value = classGuess;
+
+    zone.querySelector("#csv-do-import").addEventListener("click", async () => {
+      const nameIdx = Number(zone.querySelector("#csv-col-name").value);
+      const classIdx = Number(zone.querySelector("#csv-col-class").value);
+      let newClasses = 0, newStudents = 0, skipped = 0;
+
+      data.forEach((row) => {
+        const name = (row[nameIdx] || "").trim();
+        const clsName = (row[classIdx] || "").trim();
+        if (!name || !clsName) { skipped++; return; }
+
+        let cls = db.classes.find((c) => c.name.toLowerCase() === clsName.toLowerCase());
+        if (!cls) {
+          cls = { id: uid(), name: clsName };
+          db.classes.push(cls);
+          newClasses++;
+        }
+        const exists = db.students.some((s) => s.classId === cls.id && s.name.toLowerCase() === name.toLowerCase());
+        if (exists) { skipped++; return; }
+        db.students.push({ id: uid(), classId: cls.id, name, notes: "", absences: [] });
+        newStudents++;
+      });
+
+      await save(db);
+      closeModal();
+      render();
+      showToast(`Import terminé : ${newClasses} classe(s) et ${newStudents} élève(s) ajouté(s)${skipped ? `, ${skipped} ligne(s) ignorée(s)` : ""}.`);
+    });
+  }
+}
+
 /* ================= CLASSES ================= */
 function renderClasses(main) {
   pageHead(main, "Élèves", "Gestion des classes",
-    `<button class="btn btn-primary" id="add-class-btn">+ Nouvelle classe</button>`);
+    `<button class="btn btn-ghost" id="import-csv-btn">📥 Importer un CSV (Pronote, Excel...)</button>
+     <button class="btn btn-primary" id="add-class-btn">+ Nouvelle classe</button>`);
   main.querySelector("#add-class-btn").addEventListener("click", () => openClassModal());
+  main.querySelector("#import-csv-btn").addEventListener("click", () => openCsvImportModal());
 
   db.classes.forEach((cls) => {
     const students = db.students.filter((s) => s.classId === cls.id);
@@ -2112,12 +2239,13 @@ function buildEvalCard(ev) {
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
         <div style="text-align:right;">${summaryHtml}</div>
+        ${!isColorMode ? `<button class="btn btn-ghost btn-sm" data-import-grades>📥 Importer (CSV)</button>` : ""}
         <button class="btn btn-ghost btn-sm" data-edit-eval>Modifier</button>
       </div>
     </div>
     <div class="list-body" style="${isCollapsed ? "display:none;" : ""}"></div>`;
   card.querySelector(".eval-card-header").addEventListener("click", (e) => {
-    if (e.target.closest("[data-edit-eval]")) return;
+    if (e.target.closest("[data-edit-eval], [data-import-grades]")) return;
     toggleEvalCardCollapse(ev.id);
   });
   const body = card.querySelector(".list-body");
@@ -2163,7 +2291,68 @@ function buildEvalCard(ev) {
     });
   }
   card.querySelector("[data-edit-eval]").addEventListener("click", () => openEvalModal(ev));
+  const importBtn = card.querySelector("[data-import-grades]");
+  if (importBtn) importBtn.addEventListener("click", () => openGradesCsvImportModal(ev, students));
   return card;
+}
+
+function openGradesCsvImportModal(ev, students) {
+  openModal(`
+    <h2>Importer les notes — ${ev.title}</h2>
+    <p style="color:var(--ink-soft);font-size:12.5px;margin-bottom:14px;">
+      Les élèves sont retrouvés par correspondance de nom avec ceux déjà dans « ${className(ev.classId)} ». Les noms non reconnus seront listés, sans rien casser.
+    </p>
+    <div class="field"><label>Fichier CSV</label><input type="file" id="csv-grades-input" accept=".csv,text/csv"></div>
+    <div id="csv-grades-mapping"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="f-cancel">Fermer</button>
+    </div>`);
+  document.getElementById("f-cancel").onclick = closeModal;
+
+  document.getElementById("csv-grades-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { headers, data } = parseCSV(reader.result);
+      if (headers.length === 0 || data.length === 0) { alert("Fichier vide ou illisible."); return; }
+      const options = headers.map((h, i) => `<option value="${i}">${h || "(colonne " + (i + 1) + ")"}</option>`).join("");
+      const nameGuess = headers.findIndex((h) => /nom|élève|eleve|name/i.test(h));
+      const noteGuess = headers.findIndex((h) => /note|score|grade/i.test(h));
+      const zone = document.getElementById("csv-grades-mapping");
+      zone.innerHTML = `
+        <div class="grid grid-2">
+          <div class="field"><label>Colonne "Nom"</label><select id="csv-g-name">${options}</select></div>
+          <div class="field"><label>Colonne "Note"</label><select id="csv-g-note">${options}</select></div>
+        </div>
+        <button class="btn btn-primary" id="csv-g-import">Importer les notes</button>`;
+      zone.querySelector("#csv-g-name").value = nameGuess >= 0 ? nameGuess : 0;
+      zone.querySelector("#csv-g-note").value = noteGuess >= 0 ? noteGuess : (headers.length > 1 ? 1 : 0);
+
+      zone.querySelector("#csv-g-import").addEventListener("click", async () => {
+        const nameIdx = Number(zone.querySelector("#csv-g-name").value);
+        const noteIdx = Number(zone.querySelector("#csv-g-note").value);
+        let matched = 0;
+        const unmatched = [];
+        data.forEach((row) => {
+          const name = (row[nameIdx] || "").trim();
+          const noteRaw = (row[noteIdx] || "").trim().replace(",", ".");
+          if (!name) return;
+          const student = students.find((s) => s.name.toLowerCase() === name.toLowerCase());
+          if (!student) { unmatched.push(name); return; }
+          const note = Number(noteRaw);
+          if (noteRaw === "" || isNaN(note)) return;
+          ev.grades[student.id] = note;
+          matched++;
+        });
+        await save(db);
+        closeModal();
+        render();
+        showToast(`${matched} note(s) importée(s)${unmatched.length ? ` — non reconnus : ${unmatched.slice(0, 5).join(", ")}${unmatched.length > 5 ? "…" : ""}` : ""}.`);
+      });
+    };
+    reader.readAsText(file, "UTF-8");
+  });
 }
 
 function openEvalModal(ev) {
