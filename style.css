@@ -774,6 +774,8 @@ select.priority-urgent{color:var(--accent-red);}
   display:flex;align-items:center;justify-content:center;
   font-size:10px;
   cursor:pointer;
+  touch-action:manipulation;
+  z-index:6;
 }
 .desk-rotate{
   position:absolute;
@@ -785,6 +787,8 @@ select.priority-urgent{color:var(--accent-red);}
   display:flex;align-items:center;justify-content:center;
   font-size:11px;
   cursor:pointer;
+  touch-action:manipulation;
+  z-index:6;
 }
 
 .roster-chip{

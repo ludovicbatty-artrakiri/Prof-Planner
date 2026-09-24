@@ -1494,6 +1494,7 @@ function makeCanvasResizable(handle, room, canvas, sizer, onDrop) {
 function makeDeskDraggable(el, desk, canvas, onDrop, w = DESK_W, h = DESK_H, canvasW, canvasH) {
   let dragging = false, offsetX = 0, offsetY = 0;
   el.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".desk-remove, .desk-rotate")) return; // laisse ces boutons gérer leur propre clic
     dragging = true;
     el.setPointerCapture(e.pointerId);
     const rect = el.getBoundingClientRect();
