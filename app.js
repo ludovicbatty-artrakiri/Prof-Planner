@@ -1297,6 +1297,33 @@ function wrapCanvasForZoom(canvasWrap, canvas, canvasW, canvasH) {
   return sizer;
 }
 
+function openDeskAngleModal(desk, onApply) {
+  const presets = [0, 45, 90, 135, 180, 225, 270, 315];
+  openModal(`
+    <h2>Angle de la table</h2>
+    <div class="field"><label>Angle (degrés)</label><input id="f-angle" type="number" min="0" max="355" step="5" value="${desk.rotation || 0}"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+      ${presets.map((p) => `<button type="button" class="btn btn-ghost btn-sm" data-preset="${p}">${p}°</button>`).join("")}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="f-cancel">Annuler</button>
+      <button class="btn btn-primary" id="f-save">Appliquer</button>
+    </div>`);
+  const angleInput = document.getElementById("f-angle");
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => { angleInput.value = btn.dataset.preset; });
+  });
+  document.getElementById("f-cancel").onclick = closeModal;
+  document.getElementById("f-save").onclick = async () => {
+    let angle = Number(angleInput.value);
+    if (isNaN(angle)) angle = 0;
+    angle = ((angle % 360) + 360) % 360;
+    onApply(angle);
+    await save(db);
+    closeModal();
+  };
+}
+
 function openRoomNameModal() {
   openModal(`
     <h2>Nouvelle salle</h2>
@@ -1427,24 +1454,32 @@ function renderRoomEditor(main, room) {
     deskEl.style.top = desk.y + "px";
     deskEl.style.transform = `rotate(${desk.rotation}deg)`;
     deskEl.innerHTML = `
-      <span class="desk-rotate" title="Pivoter (Maj+clic pour l'autre sens) — ${desk.rotation}°">⟳</span>
+      <span class="desk-rotate" title="Régler l'angle de cette table">⟳</span>
       <span class="desk-remove" title="Supprimer cette table">✕</span>`;
-    deskEl.querySelector(".desk-remove").addEventListener("click", async (e) => {
+
+    const removeBtn = deskEl.querySelector(".desk-remove");
+    const rotateBtn = deskEl.querySelector(".desk-rotate");
+
+    // Empêche le glisser-déposer de la table de "voler" le clic sur ces deux boutons.
+    [removeBtn, rotateBtn].forEach((btn) => {
+      btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    });
+
+    removeBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       room.desks = room.desks.filter((d) => d.id !== desk.id);
       db.seatingPlans.forEach((pl) => { pl.seats = pl.seats.filter((s) => s.deskId !== desk.id); });
       await save(db);
       render();
     });
-    const rotateBtn = deskEl.querySelector(".desk-rotate");
-    rotateBtn.addEventListener("click", async (e) => {
+    rotateBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const step = e.shiftKey ? -5 : 5;
-      desk.rotation = ((desk.rotation + step) % 360 + 360) % 360;
-      deskEl.style.transform = `rotate(${desk.rotation}deg)`;
-      rotateBtn.title = `Pivoter (Maj+clic pour l'autre sens) — ${desk.rotation}°`;
-      await save(db);
+      openDeskAngleModal(desk, (newAngle) => {
+        desk.rotation = newAngle;
+        deskEl.style.transform = `rotate(${desk.rotation}deg)`;
+      });
     });
+
     makeDeskDraggable(deskEl, desk, canvas, async () => { await save(db); }, DESK_W, DESK_H, room.canvasW, room.canvasH);
     canvas.appendChild(deskEl);
   });
