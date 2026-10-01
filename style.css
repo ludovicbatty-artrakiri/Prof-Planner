@@ -334,7 +334,28 @@ main::before{
 }
 .tt-cell.empty:hover{border-color:var(--accent-blue);}
 .tt-cell.empty:hover .tt-add{opacity:1;}
- 
+
+.tt-time-pause .tt-start, .tt-time-pause .tt-end{color:var(--accent-amber);}
+.tt-break{
+  grid-column: 2 / -1;
+  background:repeating-linear-gradient(135deg, rgba(243,183,74,0.12), rgba(243,183,74,0.12) 10px, rgba(243,183,74,0.22) 10px, rgba(243,183,74,0.22) 20px);
+  border:1px dashed var(--accent-amber);
+  border-radius:8px;
+  min-height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  cursor:pointer;
+  color:#8A5A00;
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+}
+.tt-break:hover{background:repeating-linear-gradient(135deg, rgba(243,183,74,0.2), rgba(243,183,74,0.2) 10px, rgba(243,183,74,0.3) 10px, rgba(243,183,74,0.3) 20px);}
+.tt-break-icon{font-size:14px;}
+.slot-pause-row{border-left:3px solid var(--accent-amber);}
+
 /* ---------- toggle vue mois / colonne ---------- */
 .view-toggle{
   display:inline-flex;
