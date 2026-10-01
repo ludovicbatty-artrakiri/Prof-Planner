@@ -361,12 +361,14 @@ function renderPlanning(main) {
     table.appendChild(timeCell);
 
     if (isPause) {
-      const breakCell = document.createElement("div");
-      breakCell.className = "tt-break";
-      breakCell.title = "Modifier cette pause";
-      breakCell.innerHTML = `<span class="tt-break-icon">☕</span><span class="tt-break-label">${slot.label}</span>`;
-      breakCell.addEventListener("click", () => openSlotModal(slot));
-      table.appendChild(breakCell);
+      DAYS.forEach(() => {
+        const breakCell = document.createElement("div");
+        breakCell.className = "tt-break";
+        breakCell.title = "Modifier cette pause";
+        breakCell.innerHTML = `<span class="tt-break-icon">☕</span><span class="tt-break-label">${slot.label}</span>`;
+        breakCell.addEventListener("click", () => openSlotModal(slot));
+        table.appendChild(breakCell);
+      });
       return;
     }
 
