@@ -357,7 +357,9 @@ function renderPlanning(main) {
     const isPause = slot.type === "pause";
     const timeCell = document.createElement("div");
     timeCell.className = "tt-time" + (isPause ? " tt-time-pause" : "");
-    timeCell.innerHTML = `<span class="mono tt-start">${slot.start}</span><span class="tt-time-sep">↓</span><span class="mono tt-end">${slot.end}</span><br><span class="tt-time-label">${slot.label}</span>`;
+    timeCell.innerHTML = isPause
+      ? `<span class="mono tt-pause-range">${slot.start}–${slot.end}</span>`
+      : `<span class="mono tt-start">${slot.start}</span><span class="tt-time-sep">↓</span><span class="mono tt-end">${slot.end}</span><br><span class="tt-time-label">${slot.label}</span>`;
     table.appendChild(timeCell);
 
     if (isPause) {
