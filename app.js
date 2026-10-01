@@ -3,6 +3,7 @@
    ========================================================= */
 
 const DB_KEY = "profplanner_db_v1";
+const PENDING_SYNC_KEY = "profplanner_pending_sync_v1";
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 
 function uid() {
@@ -55,17 +56,30 @@ function parseCSV(text) {
 let pendingSyncCount = 0;
 
 async function save(db) {
+  // Toujours enregistré en local en premier : ça marche même sans réseau,
+  // et c'est ce que l'app relit si la synchronisation cloud échoue.
   localStorage.setItem(DB_KEY, JSON.stringify(db));
   if (!currentUser) return;
-  pendingSyncCount++;
   const status = document.getElementById("sync-status");
+
+  if (!navigator.onLine) {
+    // Pas de réseau : on ne tente même pas d'appeler Supabase (ça échouerait de toute façon).
+    // On marque juste qu'une synchro reste à faire ; elle partira au retour du réseau.
+    localStorage.setItem(PENDING_SYNC_KEY, "1");
+    if (status) status.textContent = "📴 Enregistré sur cet appareil · sera synchronisé au retour du réseau";
+    return;
+  }
+
+  pendingSyncCount++;
   if (status) status.textContent = "Synchronisation…";
   try {
     await cloudSyncAll(db, currentUser.id);
+    localStorage.removeItem(PENDING_SYNC_KEY);
     if (status) status.textContent = "Connecté · synchronisé en ligne";
   } catch (e) {
     console.error("Sync error:", e);
-    if (status) status.textContent = "⚠️ Échec de synchronisation (voir console)";
+    localStorage.setItem(PENDING_SYNC_KEY, "1");
+    if (status) status.textContent = "⚠️ Pas de connexion stable · enregistré sur cet appareil (nouvelle tentative au retour du réseau)";
   } finally {
     pendingSyncCount--;
   }
@@ -2562,6 +2576,28 @@ async function onAuthSuccess() {
 
 async function loadFromCloudAndRender() {
   document.getElementById("main").innerHTML = `<div class="empty-state"><div class="display">Chargement de tes données…</div></div>`;
+
+  // Si des modifications faites hors-ligne n'ont pas encore été envoyées, surtout ne pas
+  // les écraser en retéléchargeant la version du cloud : on les envoie d'abord.
+  if (localStorage.getItem(PENDING_SYNC_KEY) === "1") {
+    const cachedLocal = localStorage.getItem(DB_KEY);
+    let parsedOk = false;
+    if (cachedLocal) {
+      try { db = JSON.parse(cachedLocal); parsedOk = true; } catch (e) { /* ignoré, on retombera sur le chargement cloud normal */ }
+    }
+    if (parsedOk && navigator.onLine) {
+      showToast("Envoi des modifications faites hors-ligne…");
+      await save(db);
+      render();
+      return;
+    } else if (parsedOk) {
+      const status = document.getElementById("sync-status");
+      if (status) status.textContent = "📴 Hors ligne · modifications en attente d'envoi";
+      render();
+      return;
+    }
+  }
+
   try {
     if (!navigator.onLine) throw new Error("Hors ligne (pas de réseau détecté).");
     db = await cloudFetchAllData();
