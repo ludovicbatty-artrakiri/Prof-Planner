@@ -1,4 +1,4 @@
-const CACHE_NAME = "profplanner-cache-v4";
+const CACHE_NAME = "profplanner-cache-v5";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
