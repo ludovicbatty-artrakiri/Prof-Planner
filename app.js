@@ -2565,12 +2565,37 @@ async function loadFromCloudAndRender() {
     db = await cloudFetchAllData();
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   } catch (e) {
-    console.error("Erreur de chargement:", e);
-    document.getElementById("main").innerHTML = `<div class="empty-state"><div class="display">Impossible de charger tes données</div>${e.message || ""}</div>`;
-    return;
+    console.error("Erreur de chargement, tentative hors-ligne :", e);
+    const cached = localStorage.getItem(DB_KEY);
+    if (cached) {
+      try {
+        db = JSON.parse(cached);
+      } catch (parseErr) {
+        document.getElementById("main").innerHTML = `<div class="empty-state"><div class="display">Impossible de charger tes données</div>${e.message || ""}</div>`;
+        return;
+      }
+      const status = document.getElementById("sync-status");
+      if (status) status.textContent = "📴 Hors ligne · dernières données enregistrées sur cet appareil";
+      showToast("Pas de connexion — affichage des dernières données enregistrées sur cet appareil.");
+    } else {
+      document.getElementById("main").innerHTML = `<div class="empty-state"><div class="display">Impossible de charger tes données</div>${e.message || ""}</div>`;
+      return;
+    }
   }
   render();
 }
+
+// Détection de la connexion : on prévient quand on repasse hors-ligne / en ligne,
+// et on relance une synchronisation dès que le réseau revient.
+window.addEventListener("offline", () => {
+  const status = document.getElementById("sync-status");
+  if (status) status.textContent = "📴 Hors ligne · modifications enregistrées sur cet appareil";
+  showToast("Connexion perdue — tes modifications restent enregistrées sur cet appareil et se synchroniseront au retour du réseau.");
+});
+window.addEventListener("online", () => {
+  showToast("Connexion rétablie — synchronisation en cours…");
+  if (currentUser) save(db);
+});
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
   await cloudSignOut();
@@ -2633,11 +2658,25 @@ document.getElementById("install-btn").addEventListener("click", async () => {
 });
 
 async function bootstrap() {
-  const session = await cloudGetSession();
+  let session = null;
+  try {
+    session = await cloudGetSession();
+  } catch (e) {
+    console.warn("Session Supabase injoignable (probablement hors-ligne) :", e);
+  }
   if (session) {
     currentUser = session.user;
     showAppRoot();
     await loadFromCloudAndRender();
+  } else if (!navigator.onLine && localStorage.getItem(DB_KEY)) {
+    // Hors-ligne sans session vérifiable (ex: appli rouverte sans réseau) :
+    // on affiche quand même les données déjà enregistrées sur cet appareil
+    // plutôt que de bloquer sur l'écran de connexion.
+    db = JSON.parse(localStorage.getItem(DB_KEY));
+    showAppRoot();
+    const status = document.getElementById("sync-status");
+    if (status) status.textContent = "📴 Hors ligne · dernières données enregistrées sur cet appareil";
+    render();
   } else {
     showAuthRoot();
   }
