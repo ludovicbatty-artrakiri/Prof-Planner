@@ -109,11 +109,7 @@ function translateAuthError(msg) {
 /* ---------------- chargement des données depuis Supabase ---------------- */
 
 async function cloudFetchAllData() {
-  const [
-    classesRes, studentsRes, absencesRes, slotsRes, coursesRes,
-    prepsRes, tasksRes, evalsRes, gradesRes, eventsRes, linksRes, docsRes,
-    seatingPlansRes, seatingSeatsRes, seatingConstraintsRes, roomsRes, roomDesksRes,
-  ] = await Promise.all([
+  const results = await Promise.all([
     sb.from("classes").select("*"),
     sb.from("students").select("*"),
     sb.from("absences").select("*"),
@@ -132,6 +128,21 @@ async function cloudFetchAllData() {
     sb.from("rooms").select("*"),
     sb.from("room_desks").select("*"),
   ]);
+
+  // Supabase ne lève pas toujours une exception en cas de panne réseau : il renvoie
+  // souvent { data: null, error: {...} } pour chaque requête. Sans cette vérification,
+  // on continuait avec des tableaux vides et on écrasait les données locales déjà
+  // enregistrées avec un jeu de données vide dès qu'il n'y avait plus de réseau.
+  const failed = results.find((r) => r && r.error);
+  if (failed) {
+    throw new Error(failed.error.message || "Erreur réseau lors du chargement des données depuis Supabase.");
+  }
+
+  const [
+    classesRes, studentsRes, absencesRes, slotsRes, coursesRes,
+    prepsRes, tasksRes, evalsRes, gradesRes, eventsRes, linksRes, docsRes,
+    seatingPlansRes, seatingSeatsRes, seatingConstraintsRes, roomsRes, roomDesksRes,
+  ] = results;
 
   const classes = (classesRes.data || []).map((c) => ({ id: c.id, name: c.name }));
 
