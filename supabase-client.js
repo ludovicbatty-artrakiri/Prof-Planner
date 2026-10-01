@@ -148,6 +148,7 @@ async function cloudFetchAllData() {
 
   const timeSlots = (slotsRes.data || []).map((s) => ({
     id: s.id, label: s.label, start: (s.start_time || "").slice(0, 5), end: (s.end_time || "").slice(0, 5),
+    type: s.slot_type || "cours",
   }));
 
   const courses = (coursesRes.data || []).map((c) => ({
@@ -250,7 +251,7 @@ async function syncSimpleTable(table, rows, mapFn) {
 async function cloudSyncAll(db, userId) {
   await Promise.all([
     syncSimpleTable("classes", db.classes, (c) => ({ id: c.id, owner_id: userId, name: c.name })),
-    syncSimpleTable("time_slots", db.timeSlots, (s) => ({ id: s.id, owner_id: userId, label: s.label, start_time: s.start, end_time: s.end })),
+    syncSimpleTable("time_slots", db.timeSlots, (s) => ({ id: s.id, owner_id: userId, label: s.label, start_time: s.start, end_time: s.end, slot_type: s.type || "cours" })),
     syncSimpleTable("tasks", db.tasks, (t) => ({ id: t.id, owner_id: userId, class_id: t.classId || null, title: t.title, priority: t.priority })),
     syncSimpleTable("events", db.events, (e) => ({ id: e.id, owner_id: userId, class_id: e.classId || null, type: e.type, label: e.label, start_date: e.startDate, end_date: e.endDate })),
     syncSimpleTable("links", db.links, (l) => ({ id: l.id, owner_id: userId, title: l.title, url: l.url, description: l.description || null })),
