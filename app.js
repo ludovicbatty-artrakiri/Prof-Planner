@@ -982,20 +982,21 @@ function openCourseModal(course, prefill) {
   const classOptions = db.classes.map((c) => `<option value="${c.id}" ${course && course.classId === c.id ? "selected" : ""}>${c.name}</option>`).join("");
   const dayOptions = DAYS.map((d, i) => `<option value="${i}" ${(course ? course.day : prefill && prefill.day) === i ? "selected" : ""}>${d}</option>`).join("");
   const sortedSlots = db.timeSlots.filter((s) => s.type !== "pause").sort((a, b) => a.start.localeCompare(b.start));
+
+  if (sortedSlots.length === 0) {
+    openModal(`
+      <h2>Aucun créneau de cours défini</h2>
+      <p style="color:var(--ink-soft);font-size:13.5px;">Va d'abord dans « Mes horaires » pour créer au moins un créneau de type « Cours » (ex : 8h-9h) avant de pouvoir ajouter un cours. (Les créneaux de type « Pause » ne comptent pas.)</p>
+      <div class="modal-actions"><button class="btn btn-primary" id="f-cancel">Fermer</button></div>`);
+    document.getElementById("f-cancel").onclick = closeModal;
+    return;
+  }
+
   const currentTime = course ? course.time : (prefill && prefill.time);
   const timeOptions = sortedSlots.map((s) => `<option value="${s.start}" data-end="${s.end}" ${currentTime === s.start ? "selected" : ""}>${s.start} — ${s.end} (${s.label})</option>`).join("");
   const matchedSlot = sortedSlots.find((s) => s.start === currentTime) || sortedSlots[0];
   const endTimeValue = course ? (course.endTime || matchedSlot.end) : matchedSlot.end;
   const weekValue = course ? (course.week || "both") : (prefill && prefill.week) || "both";
-
-  if (sortedSlots.length === 0) {
-    openModal(`
-      <h2>Aucun créneau défini</h2>
-      <p style="color:var(--ink-soft);font-size:13.5px;">Va d'abord dans « Mes horaires » pour créer au moins un créneau (ex : 8h-9h) avant de pouvoir ajouter un cours.</p>
-      <div class="modal-actions"><button class="btn btn-primary" id="f-cancel">Fermer</button></div>`);
-    document.getElementById("f-cancel").onclick = closeModal;
-    return;
-  }
 
   openModal(`
     <h2>${isEdit ? "Modifier le cours" : "Ajouter un cours"}</h2>
