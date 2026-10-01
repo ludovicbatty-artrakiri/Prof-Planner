@@ -354,10 +354,21 @@ function renderPlanning(main) {
   });
 
   slots.forEach((slot) => {
+    const isPause = slot.type === "pause";
     const timeCell = document.createElement("div");
-    timeCell.className = "tt-time";
+    timeCell.className = "tt-time" + (isPause ? " tt-time-pause" : "");
     timeCell.innerHTML = `<span class="mono tt-start">${slot.start}</span><span class="tt-time-sep">↓</span><span class="mono tt-end">${slot.end}</span><br><span class="tt-time-label">${slot.label}</span>`;
     table.appendChild(timeCell);
+
+    if (isPause) {
+      const breakCell = document.createElement("div");
+      breakCell.className = "tt-break";
+      breakCell.title = "Modifier cette pause";
+      breakCell.innerHTML = `<span class="tt-break-icon">☕</span><span class="tt-break-label">${slot.label}</span>`;
+      breakCell.addEventListener("click", () => openSlotModal(slot));
+      table.appendChild(breakCell);
+      return;
+    }
 
     DAYS.forEach((_, dayIdx) => {
       const coursesHere = db.courses.filter(
@@ -821,15 +832,17 @@ function openEventModal(event, prefillDate) {
 /* ================= MES HORAIRES (créneaux) ================= */
 function renderSchedule(main) {
   pageHead(main, "Réglages", "Mes horaires",
-    `<button class="btn btn-primary" id="add-slot-btn">+ Ajouter un créneau</button>`);
+    `<button class="btn btn-ghost" id="add-pause-btn">+ Ajouter une pause</button>
+     <button class="btn btn-primary" id="add-slot-btn">+ Ajouter un créneau</button>`);
   main.querySelector("#add-slot-btn").addEventListener("click", () => openSlotModal());
+  main.querySelector("#add-pause-btn").addEventListener("click", () => openSlotModal(null, "pause"));
 
   const intro = document.createElement("p");
   intro.style.color = "var(--ink-soft)";
   intro.style.fontSize = "13.5px";
   intro.style.maxWidth = "560px";
   intro.style.marginBottom = "18px";
-  intro.textContent = "Indique les horaires de cours";
+  intro.textContent = "Indique les horaires de cours, et ajoute les récréations ou pauses pour qu'elles apparaissent sur le planning.";
   main.appendChild(intro);
 
   const slots = [...db.timeSlots].sort((a, b) => a.start.localeCompare(b.start));
@@ -843,10 +856,11 @@ function renderSchedule(main) {
     body.innerHTML = `<div class="empty-day">Aucun créneau défini.</div>`;
   } else {
     slots.forEach((slot) => {
+      const isPause = slot.type === "pause";
       const row = document.createElement("div");
-      row.className = "task-item";
+      row.className = "task-item" + (isPause ? " slot-pause-row" : "");
       row.innerHTML = `
-        <span class="pill pill-info">${slot.label}</span>
+        <span class="pill ${isPause ? "pill-normal" : "pill-info"}">${isPause ? "☕ " : "📘 "}${slot.label}</span>
         <div class="task-title mono">${slot.start} — ${slot.end}</div>
         <button class="btn btn-ghost btn-sm" data-edit>Modifier</button>`;
       row.querySelector("[data-edit]").addEventListener("click", () => openSlotModal(slot));
@@ -892,11 +906,19 @@ function renderSchedule(main) {
   });
 }
 
-function openSlotModal(slot) {
+function openSlotModal(slot, prefillType) {
   const isEdit = !!slot;
+  const currentType = slot ? (slot.type || "cours") : (prefillType || "cours");
   openModal(`
     <h2>${isEdit ? "Modifier le créneau" : "Nouveau créneau"}</h2>
-    <div class="field"><label>Nom du créneau</label><input id="f-label" value="${slot ? slot.label : ""}" placeholder="Ex : 1, Matin, P3..."></div>
+    <div class="field">
+      <label>Type de créneau</label>
+      <div class="view-toggle" id="f-type-toggle">
+        <button type="button" class="toggle-btn ${currentType === "cours" ? "active" : ""}" data-type="cours">📘 Cours</button>
+        <button type="button" class="toggle-btn ${currentType === "pause" ? "active" : ""}" data-type="pause">☕ Pause / récréation</button>
+      </div>
+    </div>
+    <div class="field"><label>Nom du créneau</label><input id="f-label" value="${slot ? slot.label : ""}" placeholder="${currentType === "pause" ? "Ex : Récréation, Pause déjeuner..." : "Ex : 1, Matin, P3..."}"></div>
     <div class="grid grid-2">
       <div class="field"><label>Début</label><input id="f-start" type="time" value="${slot ? slot.start : "08:00"}"></div>
       <div class="field"><label>Fin</label><input id="f-end" type="time" value="${slot ? slot.end : "09:00"}"></div>
@@ -907,6 +929,18 @@ function openSlotModal(slot) {
       <button class="btn btn-primary" id="f-save">Enregistrer</button>
     </div>`);
   document.getElementById("f-cancel").onclick = closeModal;
+  let selectedType = currentType;
+  const typeToggle = document.getElementById("f-type-toggle");
+  const labelInput = document.getElementById("f-label");
+  typeToggle.querySelectorAll("[data-type]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedType = btn.dataset.type;
+      typeToggle.querySelectorAll("[data-type]").forEach((b) => b.classList.toggle("active", b === btn));
+      if (!labelInput.value) {
+        labelInput.placeholder = selectedType === "pause" ? "Ex : Récréation, Pause déjeuner..." : "Ex : 1, Matin, P3...";
+      }
+    });
+  });
   if (isEdit) {
     document.getElementById("f-delete").onclick = async () => {
       db.timeSlots = db.timeSlots.filter((s) => s.id !== slot.id);
@@ -923,9 +957,10 @@ function openSlotModal(slot) {
       return;
     }
     const data = {
-      label: document.getElementById("f-label").value || start,
+      label: labelInput.value || (selectedType === "pause" ? "Pause" : start),
       start,
       end,
+      type: selectedType,
     };
     if (isEdit) {
       Object.assign(slot, data);
@@ -942,7 +977,7 @@ function openCourseModal(course, prefill) {
   const isEdit = !!course;
   const classOptions = db.classes.map((c) => `<option value="${c.id}" ${course && course.classId === c.id ? "selected" : ""}>${c.name}</option>`).join("");
   const dayOptions = DAYS.map((d, i) => `<option value="${i}" ${(course ? course.day : prefill && prefill.day) === i ? "selected" : ""}>${d}</option>`).join("");
-  const sortedSlots = [...db.timeSlots].sort((a, b) => a.start.localeCompare(b.start));
+  const sortedSlots = db.timeSlots.filter((s) => s.type !== "pause").sort((a, b) => a.start.localeCompare(b.start));
   const currentTime = course ? course.time : (prefill && prefill.time);
   const timeOptions = sortedSlots.map((s) => `<option value="${s.start}" data-end="${s.end}" ${currentTime === s.start ? "selected" : ""}>${s.start} — ${s.end} (${s.label})</option>`).join("");
   const matchedSlot = sortedSlots.find((s) => s.start === currentTime) || sortedSlots[0];
