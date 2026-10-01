@@ -2563,6 +2563,7 @@ async function onAuthSuccess() {
 async function loadFromCloudAndRender() {
   document.getElementById("main").innerHTML = `<div class="empty-state"><div class="display">Chargement de tes données…</div></div>`;
   try {
+    if (!navigator.onLine) throw new Error("Hors ligne (pas de réseau détecté).");
     db = await cloudFetchAllData();
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   } catch (e) {
